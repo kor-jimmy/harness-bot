@@ -165,14 +165,51 @@ def cmd_stop(args):
     print()
 
 
+def wait_stopped(session: str, timeout: int = 10) -> bool:
+    """Wait for a session to fully stop. Returns True if stopped within timeout."""
+    for _ in range(timeout):
+        if not is_alive(session):
+            return True
+        time.sleep(1)
+    return False
+
+
+def pause_watchdog() -> bool:
+    """Pause the watchdog session. Returns True if it was running."""
+    if is_alive("harness-watchdog"):
+        subprocess.run(["tmux", "kill-session", "-t", "harness-watchdog"], capture_output=True)
+        return True
+    return False
+
+
+def resume_watchdog():
+    """Restart the watchdog."""
+    script = os.path.join(HARNESS_DIR, "start_watchdog.sh")
+    if os.path.exists(script):
+        subprocess.run(["bash", script], capture_output=True)
+
+
 def cmd_restart(args):
     targets = resolve_targets(args.bot)
     print(f"\n[restart] {', '.join(targets)}")
+
+    # Pause watchdog during all-restart to prevent interference
+    watchdog_was_running = False
+    if args.bot == "all":
+        watchdog_was_running = pause_watchdog()
+        if watchdog_was_running:
+            print(f"  [{now()}] watchdog paused")
+
     for name in targets:
         stop_bot(name)
-    time.sleep(3)
+        if not wait_stopped(BOTS[name]["session"]):
+            print(f"  [{now()}] {name}: stop timed out — proceeding anyway")
     for name in targets:
         start_bot(name)
+
+    if watchdog_was_running:
+        resume_watchdog()
+        print(f"  [{now()}] watchdog restarted")
     print()
 
 

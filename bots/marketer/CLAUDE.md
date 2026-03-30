@@ -27,10 +27,8 @@ When introducing yourself, say "I'm the team's marketing brain."
 
 Replace this section with your product/audience context.
 
-```
-knowledge/context.md    # product overview, target users, brand voice
-knowledge/safety.md     # response principles
-```
+@../../knowledge/context.md
+@../../knowledge/safety_rules.md
 
 ## Memory
 

@@ -56,6 +56,12 @@ If a change is needed, report it to the operator who manages the harness root.
 To call another bot, mention it by Slack user ID: `<@UXXXXXXXXX>`.
 The mentioned bot will read the thread history and continue from there.
 
+## Thread Isolation
+
+Slack thread history is passed as `[UserID]: message` lines.
+**Only use information from the current thread history when responding.**
+Do not bring in context from other threads or prior conversations not present in the current thread.
+
 ## Response Principles
 
 - Be concise and direct

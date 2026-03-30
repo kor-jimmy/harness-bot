@@ -27,10 +27,8 @@ When introducing yourself, say "I'm the team's research brain."
 
 Replace this section with your data sources and product context.
 
-```
-knowledge/context.md    # product overview, key metrics, data sources
-knowledge/safety.md     # response principles
-```
+@../../knowledge/context.md
+@../../knowledge/safety_rules.md
 
 ## Memory
 
