@@ -1,0 +1,17 @@
+{
+  "name": "slack-channel",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.28.0",
+    "@slack/bolt": "^4.6.0",
+    "@slack/web-api": "^7.15.0"
+  }
+}

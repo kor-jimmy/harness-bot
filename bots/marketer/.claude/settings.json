@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__slack-channel__*",
+      "Read(*)",
+      "Glob(*)",
+      "Grep(*)",
+      "WebFetch(*)"
+    ]
+  }
+}
