@@ -98,7 +98,7 @@ async function buildFileAnnotations(files: any[]): Promise<string> {
     try {
       const res = await fetch(url, { headers: { Authorization: `Bearer ${BOT_TOKEN}` } })
       if (!res.ok) continue
-      const ext = file.filetype || 'bin'
+      const ext = (file.filetype || 'bin').replace(/[^a-zA-Z0-9]/g, '')
       const tmpPath = `/tmp/slack_file_${file.id}.${ext}`
       await Bun.write(tmpPath, await res.arrayBuffer())
       parts.push(`[첨부파일: ${file.name} (${file.mimetype}) → ${tmpPath}]`)
@@ -148,10 +148,12 @@ slack.event('app_mention', async ({ event }) => {
     })
     const messages = result.messages ?? []
     const historyParts = await Promise.all(
-      messages.map(async (m: any) => {
-        const fileAnnotations = await buildFileAnnotations(m.files ?? [])
-        return `[${m.user ?? 'bot'}]: ${m.text}${fileAnnotations}`
-      })
+      messages
+        .filter((m: any) => !m.bot_id)
+        .map(async (m: any) => {
+          const fileAnnotations = await buildFileAnnotations(m.files ?? [])
+          return `[${m.user ?? 'bot'}]: ${m.text}${fileAnnotations}`
+        })
     )
     history = historyParts.join('\n')
   } catch (e) {
