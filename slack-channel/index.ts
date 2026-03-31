@@ -82,7 +82,7 @@ mcp.setRequestHandler(CallToolRequestSchema, async req => {
       text: string
     }
     await web.chat.postMessage({ channel, thread_ts, text })
-    resetReplyTimer(channel, thread_ts)
+    clearReplyTimer(channel, thread_ts)
     return { content: [{ type: 'text', text: 'sent' }] }
   }
   throw new Error(`unknown tool: ${req.params.name}`)
