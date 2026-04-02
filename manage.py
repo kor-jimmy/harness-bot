@@ -16,6 +16,17 @@ import os
 from datetime import datetime
 
 HARNESS_DIR = os.path.dirname(os.path.abspath(__file__))
+LOG_DIR = os.path.join(HARNESS_DIR, "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+
+
+def log_to_file(message: str):
+    """Write watchdog events to a daily log file."""
+    log_file = os.path.join(LOG_DIR, f"watchdog-{datetime.now().strftime('%Y-%m-%d')}.log")
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open(log_file, "a") as f:
+        f.write(f"[{timestamp}] {message}\n")
+
 
 # Add or remove bots here. Each bot needs a directory under bots/ with a start.sh.
 BOTS = {
@@ -220,13 +231,19 @@ def cmd_watch(args):
         while True:
             for name, bot in BOTS.items():
                 if not is_alive(bot["session"]):
-                    print(f"  [{now()}] {name} session gone → restarting...")
+                    msg = f"{name} session gone → restarting..."
+                    print(f"  [{now()}] {msg}")
+                    log_to_file(msg)
                     start_bot(name)
+                    log_to_file(f"{name} restarted")
                 elif not is_claude_alive(bot["session"]):
-                    print(f"  [{now()}] {name} Claude exited → restarting session...")
+                    msg = f"{name} Claude exited → restarting session..."
+                    print(f"  [{now()}] {msg}")
+                    log_to_file(msg)
                     stop_bot(name)
                     time.sleep(1)
                     start_bot(name)
+                    log_to_file(f"{name} restarted")
             time.sleep(interval)
     except KeyboardInterrupt:
         print("\nwatchdog stopped.")

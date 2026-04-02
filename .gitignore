@@ -1,0 +1,8 @@
+.DS_Store
+.omc/
+*.env
+.env.*
+!.env.example
+
+# watchdog logs
+logs/
