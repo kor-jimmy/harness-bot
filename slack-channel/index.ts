@@ -128,12 +128,6 @@ const slack = new App({
 
 // 멘션 이벤트 수신 → 스레드 히스토리 포함해서 Claude에 전달
 slack.event('app_mention', async ({ event }) => {
-  // 봇이 보낸 멘션은 무시 (봇 간 무한루프 방지)
-  if ((event as any).bot_id) {
-    process.stderr.write(`[info] ignoring mention from bot: ${(event as any).bot_id}\n`)
-    return
-  }
-
   // 수신 확인 이모지
   web.reactions.add({ channel: event.channel, timestamp: event.ts, name: 'eyes' }).catch(() => {})
 
