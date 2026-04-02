@@ -148,12 +148,11 @@ slack.event('app_mention', async ({ event }) => {
     })
     const messages = result.messages ?? []
     const historyParts = await Promise.all(
-      messages
-        .filter((m: any) => !m.bot_id)
-        .map(async (m: any) => {
-          const fileAnnotations = await buildFileAnnotations(m.files ?? [])
-          return `[${m.user ?? 'bot'}]: ${m.text}${fileAnnotations}`
-        })
+      messages.map(async (m: any) => {
+        const fileAnnotations = await buildFileAnnotations(m.files ?? [])
+        const sender = m.bot_id ? `bot:${m.username ?? m.bot_id}` : (m.user ?? 'unknown')
+        return `[${sender}]: ${m.text}${fileAnnotations}`
+      })
     )
     history = historyParts.join('\n')
   } catch (e) {
@@ -184,3 +183,25 @@ slack.event('app_mention', async ({ event }) => {
 })
 
 await slack.start()
+
+// 헬스체크 — 60초마다 auth.test()로 Slack 연결 확인, 3회 연속 실패 시 프로세스 종료
+const HEALTH_CHECK_INTERVAL_MS = 60_000
+const MAX_FAILURES = 3
+let consecutiveFailures = 0
+
+setInterval(async () => {
+  try {
+    await web.auth.test()
+    if (consecutiveFailures > 0) {
+      process.stderr.write(`[info] slack health check recovered after ${consecutiveFailures} failure(s)\n`)
+    }
+    consecutiveFailures = 0
+  } catch (e) {
+    consecutiveFailures++
+    process.stderr.write(`[warn] slack health check failed (${consecutiveFailures}/${MAX_FAILURES}): ${e}\n`)
+    if (consecutiveFailures >= MAX_FAILURES) {
+      process.stderr.write(`[error] slack health check failed ${MAX_FAILURES} times — exiting for restart\n`)
+      process.exit(1)
+    }
+  }
+}, HEALTH_CHECK_INTERVAL_MS)
