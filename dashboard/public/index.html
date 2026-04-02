@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Harness Dashboard</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-title">Harness</div>
+      <div class="sidebar-subtitle">Harness Dashboard</div>
+      <div id="sidebarBots" class="sidebar-bots"></div>
+    </div>
+    <nav class="nav">
+      <button class="nav-btn active" data-tab="status">
+        <span class="nav-icon">&#x25C9;</span> Status
+      </button>
+      <button class="nav-btn" data-tab="logs">
+        <span class="nav-icon">&#x25A4;</span> Bot Logs
+      </button>
+      <button class="nav-btn" data-tab="watchdog">
+        <span class="nav-icon">&#x26A0;</span> Watchdog
+      </button>
+      <button class="nav-btn" data-tab="settings">
+        <span class="nav-icon">&#x2699;</span> Settings
+      </button>
+      <button class="nav-btn" data-tab="git">
+        <span class="nav-icon">&#x2387;</span> Git
+      </button>
+      <button class="nav-btn" data-tab="slack">
+        <span class="nav-icon">&#x2726;</span> Slack
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <span class="version">harness-bot v1.0</span>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main">
+    <!-- Status -->
+    <section class="tab-panel active" id="tab-status">
+      <div class="panel-header">
+        <h2 class="panel-title">Bot Status</h2>
+        <div class="panel-actions">
+          <span class="last-updated" id="statusUpdated"></span>
+          <button class="refresh-btn" onclick="loadStatus(true)" title="Refresh">&#x21BB;</button>
+        </div>
+      </div>
+      <div id="statusContent" class="card">
+        <p class="muted">Loading...</p>
+      </div>
+    </section>
+
+    <!-- Bot Logs -->
+    <section class="tab-panel" id="tab-logs">
+      <div class="panel-header">
+        <h2 class="panel-title">Bot Activity Logs</h2>
+        <div class="panel-actions">
+          <span class="last-updated" id="logsUpdated"></span>
+          <button class="refresh-btn" onclick="loadLogs(true)" title="Refresh">&#x21BB;</button>
+        </div>
+      </div>
+      <div class="split-layout">
+        <div class="list-pane" id="logList">
+          <p class="muted">Loading...</p>
+        </div>
+        <div class="detail-pane card" id="logDetail">
+          <p class="muted">Select a log entry</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Watchdog Logs -->
+    <section class="tab-panel" id="tab-watchdog">
+      <div class="panel-header">
+        <h2 class="panel-title">Watchdog Logs</h2>
+        <div class="panel-actions">
+          <span class="last-updated" id="watchdogUpdated"></span>
+          <button class="refresh-btn" onclick="loadWatchdogLogs(true)" title="Refresh">&#x21BB;</button>
+        </div>
+      </div>
+      <div class="split-layout">
+        <div class="list-pane" id="watchdogList">
+          <p class="muted">Loading...</p>
+        </div>
+        <div class="detail-pane card" id="watchdogDetail">
+          <p class="muted">Select a date</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Settings -->
+    <section class="tab-panel" id="tab-settings">
+      <div class="panel-header">
+        <h2 class="panel-title">Settings</h2>
+        <div class="panel-actions">
+          <span class="last-updated" id="settingsUpdated"></span>
+          <button class="refresh-btn" onclick="loadSettings(true)" title="Refresh">&#x21BB;</button>
+        </div>
+      </div>
+      <div class="split-layout">
+        <div class="list-pane" id="settingsList">
+          <p class="muted">Loading...</p>
+        </div>
+        <div class="detail-pane card" id="settingsDetail">
+          <p class="muted">Select a file</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Git -->
+    <section class="tab-panel" id="tab-git">
+      <div class="panel-header">
+        <h2 class="panel-title">Git History</h2>
+        <div class="panel-actions">
+          <span class="last-updated" id="gitUpdated"></span>
+          <button class="refresh-btn" onclick="loadGit(true)" title="Refresh">&#x21BB;</button>
+        </div>
+      </div>
+      <div class="card" id="gitContent">
+        <p class="muted">Loading...</p>
+      </div>
+    </section>
+
+    <!-- Slack -->
+    <section class="tab-panel" id="tab-slack">
+      <div class="panel-header">
+        <h2 class="panel-title">Slack Activity</h2>
+        <div class="panel-actions">
+          <div class="date-filter">
+            <input type="date" id="filterFrom" onchange="applyDateFilter()" />
+            <span class="date-sep">-</span>
+            <input type="date" id="filterTo" onchange="applyDateFilter()" />
+          </div>
+          <span class="last-updated" id="slackUpdated"></span>
+          <button class="refresh-btn" onclick="loadSlackChannels(true)" title="Refresh">&#x21BB;</button>
+        </div>
+      </div>
+      <div class="split-layout triple">
+        <div class="list-pane" id="slackChannels">
+          <p class="muted">Loading...</p>
+        </div>
+        <div class="list-pane" id="slackThreads">
+          <p class="muted">Select a channel</p>
+        </div>
+        <div class="detail-pane card" id="slackMessages">
+          <p class="muted">Select a thread</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
