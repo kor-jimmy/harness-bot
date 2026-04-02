@@ -4,6 +4,8 @@ Run a team of role-based Claude Code bots in Slack — each bot is a persistent 
 
 Built on the principles from [OpenAI's Harness Engineering](https://openai.com/index/harness-engineering/) and [Anthropic's Harness Design for Long-Running Apps](https://www.anthropic.com/engineering/harness-design-long-running-apps).
 
+> 📖 [Building Persistent Claude Code Bots with MCP and Slack](https://medium.com/p/16a24c22771b) — blog post covering the design, memory system, watchdog, and dashboard.
+
 ## How It Works
 
 ```
@@ -15,6 +17,8 @@ Slack mention
 ```
 
 Each bot runs as an independent `claude` process in a tmux session. The `slack-channel` MCP server bridges Slack Socket Mode events into Claude Code's context window. Bots share the same channel server binary but have completely isolated contexts.
+
+> **Note:** This project uses Claude Code's `experimental.claude/channel` MCP capability to deliver events into the context window. As the name implies, this is an experimental feature — the API may change in future Claude Code releases. See the [Channels Reference](https://code.claude.com/docs/en/channels-reference) for the current spec.
 
 ## Project Structure
 
