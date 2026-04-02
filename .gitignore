@@ -6,3 +6,6 @@
 
 # watchdog logs
 logs/
+
+# blog drafts
+docs/blog-draft.md
