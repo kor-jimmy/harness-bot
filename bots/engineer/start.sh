@@ -12,7 +12,7 @@ fi
 export BOT_NAME="engineer"
 
 tmux new-session -d -s "$SESSION" -c "$BOT_DIR"
-tmux send-keys -t "$SESSION" "claude --model claude-sonnet-4-5 --dangerously-load-development-channels server:$SLACK_CHANNEL_DIR" Enter
+tmux send-keys -t "$SESSION" "claude --model claude-sonnet-4-6 --dangerously-load-development-channels server:$SLACK_CHANNEL_DIR" Enter
 
 echo "Started: $SESSION"
 echo "Attach:  tmux attach -t $SESSION"

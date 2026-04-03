@@ -230,6 +230,8 @@ def cmd_watch(args):
     try:
         while True:
             for name, bot in BOTS.items():
+                if not bot.get("watch", True):
+                    continue
                 if not is_alive(bot["session"]):
                     msg = f"{name} session gone → restarting..."
                     print(f"  [{now()}] {msg}")

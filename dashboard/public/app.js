@@ -1,4 +1,4 @@
-/* ── Nursely Harness Dashboard — Client ─────────────────────────── */
+/* ── Harness Bot Dashboard — Client ─────────────────────────────── */
 
 const API = "";
 let slackPollTimer = null;
