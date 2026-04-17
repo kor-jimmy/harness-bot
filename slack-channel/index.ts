@@ -11,7 +11,8 @@ const BOT_NAME = process.env.BOT_NAME || 'bot'
 
 const web = new WebClient(BOT_TOKEN)
 
-// 슬라이딩 타임아웃 — 마지막 reply 이후 X분간 침묵이면 fallback 전송
+// Sliding reply timeout — if the bot stays silent for X minutes after
+// receiving a mention, post a fallback message so the user isn't left hanging.
 const REPLY_TIMEOUT_MS = 5 * 60 * 1000
 const pendingTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
@@ -26,7 +27,7 @@ function resetReplyTimer(channel: string, thread_ts: string) {
     await web.chat.postMessage({
       channel,
       thread_ts,
-      text: '응답이 지연되고 있습니다. 잠시 후 다시 멘션해 주세요.',
+      text: 'The bot is taking longer than expected. Please mention it again in a moment.',
     }).catch(() => {})
   }, REPLY_TIMEOUT_MS)
 
@@ -42,7 +43,7 @@ function clearReplyTimer(channel: string, thread_ts: string) {
   }
 }
 
-// MCP 채널 서버
+// MCP channel server
 const mcp = new Server(
   { name: `slack-${BOT_NAME}`, version: '0.0.1' },
   {
@@ -51,23 +52,24 @@ const mcp = new Server(
       tools: {},
     },
     instructions:
-      `Slack 메시지가 <channel source="slack-${BOT_NAME}" ...> 형태로 옵니다. ` +
-      `반드시 reply 툴로 응답하세요. channel과 thread_ts를 태그에서 그대로 가져와 사용합니다. ` +
-      `텔레그램 마크다운 문법(**bold**)은 사용하지 말고, 일반 텍스트로 응답합니다.`,
+      `Slack messages arrive as <channel source="slack-${BOT_NAME}" ...> blocks. ` +
+      `Always respond with the reply tool. Copy the channel and thread_ts from the tag verbatim. ` +
+      `Use Slack mrkdwn (*bold*, _italic_, \`code\`) — not standard Markdown (**bold**). ` +
+      `For multi-step work, send a short "working on it" reply first, then a final reply when done.`,
   },
 )
 
-// reply 툴: Slack 스레드로 응답
+// reply tool — post into the Slack thread
 mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [{
     name: 'reply',
-    description: 'Slack 스레드에 메시지를 보냅니다',
+    description: 'Send a message to the Slack thread.',
     inputSchema: {
       type: 'object',
       properties: {
-        channel: { type: 'string', description: '슬랙 채널 ID' },
-        thread_ts: { type: 'string', description: '스레드 timestamp' },
-        text: { type: 'string', description: '보낼 메시지' },
+        channel: { type: 'string', description: 'Slack channel ID' },
+        thread_ts: { type: 'string', description: 'Thread timestamp' },
+        text: { type: 'string', description: 'Message body' },
       },
       required: ['channel', 'thread_ts', 'text'],
     },
@@ -88,22 +90,60 @@ mcp.setRequestHandler(CallToolRequestSchema, async req => {
   throw new Error(`unknown tool: ${req.params.name}`)
 })
 
-// Slack 파일 다운로드 헬퍼 — /tmp에 저장 후 경로를 Claude에 전달 (OS가 정리)
+// Allowed MIME types for Slack file attachments
+const ALLOWED_MIME_TYPES = new Set([
+  'image/png', 'image/jpeg', 'image/gif', 'image/webp',
+  'application/pdf',
+  'text/plain', 'text/csv',
+])
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024   // 10MB (non-image)
+const MAX_IMAGE_SIZE_BYTES = 3 * 1024 * 1024   // 3MB (image — base64-encoded payload stays under the Claude API 5MB cap)
+
+// Slack file helper — download into /tmp and pass the path to Claude (OS cleans it up)
 async function buildFileAnnotations(files: any[]): Promise<string> {
   if (!files?.length) return ''
   const parts: string[] = []
   for (const file of files) {
+    const mime = file.mimetype || ''
+    const size = file.size || 0
+
+    if (!ALLOWED_MIME_TYPES.has(mime)) {
+      process.stderr.write(`[security] blocked file type: ${file.name} (${mime})\n`)
+      parts.push(`[attachment blocked: ${file.name} — unsupported type (${mime})]`)
+      continue
+    }
+
+    const isImage = mime.startsWith('image/')
+    const sizeLimit = isImage ? MAX_IMAGE_SIZE_BYTES : MAX_FILE_SIZE_BYTES
+    if (size > sizeLimit) {
+      const limitMB = Math.round(sizeLimit / 1024 / 1024)
+      process.stderr.write(`[security] file too large: ${file.name} (${size} bytes, limit ${limitMB}MB)\n`)
+      parts.push(`[attachment blocked: ${file.name} — too large (${Math.round(size / 1024 / 1024)}MB, max ${limitMB}MB)]`)
+      continue
+    }
+
     const url = file.url_private_download || file.url_private
     if (!url) continue
     try {
       const res = await fetch(url, { headers: { Authorization: `Bearer ${BOT_TOKEN}` } })
       if (!res.ok) continue
+
+      // Verify the actual downloaded size (file.size from Slack can be missing or stale)
+      const buffer = await res.arrayBuffer()
+      const actualSize = buffer.byteLength
+      if (actualSize > sizeLimit) {
+        const limitMB = Math.round(sizeLimit / 1024 / 1024)
+        process.stderr.write(`[security] downloaded file too large: ${file.name} (${actualSize} bytes, limit ${limitMB}MB)\n`)
+        parts.push(`[attachment blocked: ${file.name} — too large (${Math.round(actualSize / 1024 / 1024)}MB, max ${limitMB}MB)]`)
+        continue
+      }
+
       const ext = (file.filetype || 'bin').replace(/[^a-zA-Z0-9]/g, '')
       const tmpPath = `/tmp/slack_file_${file.id}.${ext}`
-      await Bun.write(tmpPath, await res.arrayBuffer())
-      parts.push(`[첨부파일: ${file.name} (${file.mimetype}) → ${tmpPath}]`)
+      await Bun.write(tmpPath, buffer)
+      parts.push(`[attachment: ${file.name} (${mime}) → ${tmpPath}]`)
     } catch {
-      // 파일 다운로드 실패는 무시
+      // ignore download failures
     }
   }
   return parts.length ? '\n' + parts.join('\n') : ''
@@ -111,29 +151,28 @@ async function buildFileAnnotations(files: any[]): Promise<string> {
 
 await mcp.connect(new StdioServerTransport())
 
-// Slack Socket Mode 앱 (logger를 stderr로 — stdout은 MCP stdio 전용)
+// Slack Socket Mode (logger writes to stderr — stdout is reserved for MCP stdio)
 const slack = new App({
   token: BOT_TOKEN,
   appToken: APP_TOKEN,
   socketMode: true,
   logger: {
     debug: (...msgs) => process.stderr.write(`[debug] ${msgs.join(' ')}\n`),
-    info: (...msgs) => process.stderr.write(`[info] ${msgs.join(' ')}\n`),
-    warn: (...msgs) => process.stderr.write(`[warn] ${msgs.join(' ')}\n`),
+    info:  (...msgs) => process.stderr.write(`[info]  ${msgs.join(' ')}\n`),
+    warn:  (...msgs) => process.stderr.write(`[warn]  ${msgs.join(' ')}\n`),
     error: (...msgs) => process.stderr.write(`[error] ${msgs.join(' ')}\n`),
     setLevel: () => {},
     getLevel: () => 'info' as any,
   },
 })
 
-// 멘션 이벤트 수신 → 스레드 히스토리 포함해서 Claude에 전달
+// Mention handler → include thread history, then forward to Claude
 slack.event('app_mention', async ({ event }) => {
-  // 수신 확인 이모지
+  // Acknowledge with an eyes emoji so the user sees the bot noticed
   web.reactions.add({ channel: event.channel, timestamp: event.ts, name: 'eyes' }).catch(() => {})
 
   const threadTs = (event as any).thread_ts || event.ts
 
-  // 스레드 히스토리 가져오기
   let history = ''
   try {
     const result = await web.conversations.replies({
@@ -157,7 +196,7 @@ slack.event('app_mention', async ({ event }) => {
   const currentMessage = `${(event as any).text}${currentFileAnnotations}`
 
   const content = history
-    ? `[스레드 히스토리]\n${history}\n\n[현재 메시지]\n${currentMessage}`
+    ? `[thread history]\n${history}\n\n[current message]\n${currentMessage}`
     : currentMessage
 
   await mcp.notification({
@@ -178,7 +217,8 @@ slack.event('app_mention', async ({ event }) => {
 
 await slack.start()
 
-// 헬스체크 — 60초마다 auth.test()로 Slack 연결 확인, 3회 연속 실패 시 프로세스 종료
+// Health check — every 60s, call auth.test(); after 3 consecutive failures,
+// exit so the watchdog can restart the process.
 const HEALTH_CHECK_INTERVAL_MS = 60_000
 const MAX_FAILURES = 3
 let consecutiveFailures = 0

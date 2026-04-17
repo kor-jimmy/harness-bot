@@ -1,9 +1,0 @@
-{
-  "_comment": "This is an alternative to the --dangerously-load-development-channels flag in start.sh. Use one or the other, not both.",
-  "mcpServers": {
-    "slack-channel": {
-      "command": "bun",
-      "args": ["run", "<HARNESS_ROOT>/slack-channel/index.ts"]
-    }
-  }
-}

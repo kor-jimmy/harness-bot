@@ -1,0 +1,9 @@
+{
+  "_comment": "Alternative to --dangerously-load-development-channels server:slack-channel in scripts/start-cli.sh. Use one or the other, not both. Also add external MCP servers here as needed.",
+  "mcpServers": {
+    "slack-channel": {
+      "command": "bun",
+      "args": ["run", "../../slack-channel/index.ts"]
+    }
+  }
+}

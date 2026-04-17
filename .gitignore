@@ -9,3 +9,37 @@ logs/
 
 # blog drafts
 docs/blog-draft.md
+
+# dependencies
+node_modules/
+bun.lockb
+
+# build / cache
+dist/
+.cache/
+
+# IDE
+.vscode/
+
+# Claude Code local settings (personal)
+.claude/settings.local.json
+.claude/model-config.md
+
+# MCP config (contains tokens)
+.mcp.json
+mcp-config.json
+
+# bot-local tmp (keep .gitkeep)
+bots/*/tmp/*
+!bots/*/tmp/.gitkeep
+.tmp/
+*.tmp
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python

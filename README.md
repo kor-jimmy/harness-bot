@@ -24,34 +24,38 @@ Each bot runs as an independent `claude` process in a tmux session. The `slack-c
 
 ```
 harness-bot/
-  CLAUDE.md              # shared rules for all bots
-  manage.py              # bot lifecycle manager (start/stop/restart/watch)
-  .env.example           # environment variables template
+  CLAUDE.md                       # shared rules for all bots
+  manage.py                       # bot lifecycle manager (start/stop/restart/attach/watch)
+  .env.example                    # root env (alert webhook etc.)
+  .claude/
+    commands/
+      add-bot.md                  # /add-bot slash command
+    auto-commit.sh                # PostToolUse hook — auto-commits knowledge/docs/log edits
+  scripts/
+    start-cli.sh                  # shared launcher (reads bot .env, starts tmux + claude)
+    auto-approve.sh               # background watcher that auto-clicks permission prompts
   slack-channel/
-    index.ts             # MCP channel server (Slack <-> Claude Code bridge)
+    index.ts                      # MCP channel server (Slack <-> Claude Code bridge)
     package.json
   dashboard/
-    server.js            # web dashboard (bot status, logs, Slack activity)
+    server.js                     # web dashboard (bot status, logs, Slack activity)
     public/
-      index.html
-      app.js
-      style.css
   bots/
-    engineer/            # example: engineer bot
-      CLAUDE.md          # persona, responsibilities, rules
-      .claude/
-        settings.json    # tool permissions
-      .mcp.json.example  # MCP server config template
-      start.sh           # tmux session launcher
-      docs/
-        memory.md        # mid-term memory (updated by bot during sessions)
-      log/               # daily activity logs (YYYY-MM-DD.md)
-    marketer/            # example: marketer bot
-    researcher/          # example: researcher bot
+    example-bot-cli/              # template — copy this (or run /add-bot) to make a bot
+      CLAUDE.md                   # persona, responsibilities
+      .env.example
+      .mcp.json.example
+      .claude/settings.json       # per-bot tool permissions
+      docs/memory.md              # mid-term memory
+      knowledge/                  # bot-specific domain knowledge
+      log/                        # daily activity logs (YYYY-MM-DD.md)
+      mcp/                        # optional: custom MCP server implementations
+      tmp/                        # scratch (gitignored)
   knowledge/
-    context.md           # product/team context (fill this in)
-    safety_rules.md      # shared response principles
-  logs/                  # watchdog logs (auto-generated, gitignored)
+    context.md                    # product/team context (fill this in)
+    safety_rules.md               # shared response principles
+    corrections.md                # shared, append-only correction log
+  logs/                           # watchdog logs (auto-generated, gitignored)
 ```
 
 ## Prerequisites
@@ -59,6 +63,7 @@ harness-bot/
 - [Claude Code](https://claude.ai/code) CLI installed and authenticated
 - [Bun](https://bun.sh) runtime
 - tmux
+- Python 3.10+
 - A Slack app with Socket Mode enabled
 
 ## Slack App Setup
@@ -70,18 +75,18 @@ harness-bot/
    | Scope | Purpose |
    |-------|---------|
    | `app_mentions:read` | Receive mention events |
-   | `channels:read` | List public channels |
-   | `channels:history` | Read public channel messages |
-   | `chat:write` | Send messages |
-   | `reactions:write` | Add emoji reactions |
-   | `files:read` | Read file attachments |
-   | `users:read` | Resolve user names |
+   | `channels:read`     | List public channels |
+   | `channels:history`  | Read public channel messages |
+   | `chat:write`        | Send messages |
+   | `reactions:write`   | Add emoji reactions |
+   | `files:read`        | Read file attachments |
+   | `users:read`        | Resolve user names |
 
    Optional (for private channels):
-   | Scope | Purpose |
-   |-------|---------|
-   | `groups:read` | List private channels |
-   | `groups:history` | Read private channel messages |
+   | Scope            | Purpose                            |
+   |------------------|------------------------------------|
+   | `groups:read`    | List private channels              |
+   | `groups:history` | Read private channel messages      |
 
 4. Under **Event Subscriptions > Subscribe to bot events**, add `app_mention`
 5. Install the app to your workspace and copy the Bot Token (`xoxb-...`)
@@ -94,36 +99,85 @@ harness-bot/
 cd slack-channel
 bun install
 
-# 2. Set up environment
+# 2. (Optional) Set up root .env for watchdog alerts
 cp .env.example .env
-# Edit .env with your SLACK_BOT_TOKEN and SLACK_APP_TOKEN
+# Edit .env and fill in ALERT_WEBHOOK_URL if you want crash notifications
 ```
 
-> Each bot's working directory inherits `.env` automatically via Bun's built-in loader.
-> If bots use different Slack apps, place separate `.env` files in each `bots/<name>/` directory.
+## Adding a New Bot
+
+The fastest path is the `/add-bot` slash command inside Claude Code. It verifies prerequisites, validates Slack tokens against the real API, copies the template, writes `.env` + `.mcp.json`, and optionally creates a `bot/<name>` git branch.
+
+```
+claude                            # launch Claude Code in the harness-bot root
+> /add-bot
+```
+
+The command walks you through:
+1. Prerequisite check (Python, tmux, Bun, dependencies — offers auto-install)
+2. Bot name + description
+3. Slack Bot Token + App Token (validated against the Slack API)
+4. Claude model selection
+5. Optional auto-commit hook (knowledge/docs/log edits)
+6. Optional auto-approve for permission prompts
+7. Optional `bot/<name>` git branch
+8. Confirmation → scaffold + commit
+
+### Manual path
+
+If you'd rather do it by hand:
+
+1. `cp -r bots/example-bot-cli bots/your-bot`
+2. Edit `bots/your-bot/CLAUDE.md` — persona, responsibilities.
+3. `cp bots/your-bot/.env.example bots/your-bot/.env` and fill in tokens.
+4. `cp bots/your-bot/.mcp.json.example bots/your-bot/.mcp.json` (or rely on the `--dangerously-load-development-channels` flag that `scripts/start-cli.sh` already sets).
+5. `python3 manage.py start your-bot`
 
 ## Usage
 
 ```bash
-# Start all bots
+# Start all bots + dashboard + watchdog
 python3 manage.py start
 
 # Start a single bot
-python3 manage.py start engineer
+python3 manage.py start your-bot
 
 # Check status
 python3 manage.py status
 
-# Restart all
+# Attach to a bot's tmux session
+python3 manage.py attach your-bot
+
+# Restart
 python3 manage.py restart
 
+# Stop everything (bots, dashboard, watchdog)
+python3 manage.py stop
+
 # Watchdog — auto-restart crashed bots (logs to logs/watchdog-YYYY-MM-DD.log)
-python3 manage.py watch
+python3 manage.py watch --interval 30
+```
+
+`python3 manage.py start` boots the dashboard (`http://localhost:3001`) and the watchdog automatically. A bot you stopped manually (`stop <bot>`) leaves a `.tmp/<bot>.stopped` flag so the watchdog won't bring it back; `start <bot>` clears it.
+
+### Attaching to a bot
+
+```bash
+# Through manage.py (recommended)
+python3 manage.py attach your-bot
+
+# Or directly
+tmux attach -t harness-your-bot
+
+# Detach (the bot keeps running)
+# Ctrl+B then D
 ```
 
 ## Dashboard
 
 A web dashboard for monitoring bot status, activity logs, Slack conversations, and settings.
+
+Starts automatically with `python3 manage.py start`. Or run standalone:
 
 ```bash
 node dashboard/server.js
@@ -131,55 +185,123 @@ node dashboard/server.js
 ```
 
 Features:
-- **Status** — real-time bot status (running/stopped/warning)
+- **Status** — real-time bot status (running / stopped / warning)
 - **Bot Logs** — daily activity logs per bot (`log/YYYY-MM-DD.md`)
 - **Watchdog Logs** — auto-restart event history (separate from bot logs)
 - **Settings** — browse all CLAUDE.md, knowledge, and memory files
 - **Git** — recent commit history
 - **Slack** — browse channels, threads, and conversations where bots were mentioned
 
-## Adding a New Bot
+## Permissions
 
-1. Copy an existing bot directory: `cp -r bots/engineer bots/your-role`
-2. Update `bots/your-role/CLAUDE.md` — persona, responsibilities, rules
-3. Update `bots/your-role/start.sh` — change `SESSION` and `BOT_NAME`
-4. Copy `.mcp.json.example` to `.mcp.json` and update the path
-5. Add the bot to `manage.py` BOTS dict
-6. Create a Slack app (or reuse one) and update `.env`
-7. Run `python3 manage.py start your-role`
+Each bot has its own `.claude/settings.json` (permission allowlist + denylist). The template in `bots/example-bot-cli/.claude/settings.json` is a conservative starting point — read-heavy, no destructive git operations. Adjust per bot.
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp__slack-channel__*",
+      "Read(*)",
+      "Bash(git log:*)",
+      "Bash(curl:*)",
+      "Write(bots/my-bot/log/*)",
+      "Write(bots/my-bot/docs/*)"
+    ],
+    "deny": [
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
+    ]
+  }
+}
+```
+
+## External MCP Servers
+
+Add more MCP servers to a bot's `.mcp.json` (in addition to `slack-channel`), then extend `.claude/settings.json` with `mcp__<name>__*` permissions.
+
+```json
+{
+  "mcpServers": {
+    "slack-channel": {
+      "command": "bun",
+      "args": ["run", "../../slack-channel/index.ts"]
+    },
+    "sentry": {
+      "command": "python3",
+      "args": ["bots/my-bot/mcp/mcp-sentry/server.py"],
+      "env": { "SENTRY_DSN": "https://..." }
+    }
+  }
+}
+```
+
+Custom MCP servers can live in `bots/<bot>/mcp/mcp-<service>/server.py` — plain FastMCP works:
+
+```python
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("sentry")
+
+@mcp.tool()
+def get_latest_errors(project: str, limit: int = 10) -> str:
+    ...
+    return "result"
+
+if __name__ == "__main__":
+    mcp.run()
+```
 
 ## Memory System
 
 Each bot maintains a 3-layer memory:
 
-| Layer | Location | Lifespan |
-|---|---|---|
-| Long-term | `CLAUDE.md` + `knowledge/` | Permanent (version controlled) |
-| Mid-term | `docs/memory.md` | Persistent (updated each session) |
-| Short-term | Claude's context window | Current session only |
+| Layer      | Location                        | Lifespan                       |
+|------------|---------------------------------|--------------------------------|
+| Long-term  | `CLAUDE.md` + `knowledge/`      | Permanent (version controlled) |
+| Mid-term   | `docs/memory.md`                | Persistent (updated each session) |
+| Short-term | Claude's context window         | Current session only           |
 
-Bots auto-update `docs/memory.md` when the user changes direction, confirms a pattern, or when a mistake occurs.
+Bots auto-update `docs/memory.md` when the user changes direction, confirms a pattern, or when a mistake occurs. Mistakes are also appended to the shared `knowledge/corrections.md`.
 
 ## Bot Collaboration
 
 Bots can mention each other in Slack threads. Each mentioned bot reads the full thread history and picks up where the previous one left off.
 
 ```
-User -> @engineer: review this PR
-Engineer -> analyzes and replies
-User -> @researcher: do we have data supporting this approach?
-Researcher -> reads the thread, adds data analysis
+User     -> @alice: review this PR
+Alice    -> analyzes and replies
+User     -> @bob:   do we have data supporting this approach?
+Bob      -> reads the thread, adds data analysis
 ```
+
+See the **Handoff Protocol** section in `CLAUDE.md` for how bots close their turn before passing control.
+
+## Branching Strategy
+
+```
+master          — shared skeleton (infrastructure, common rules, template bot)
+  └─ bot/alice  — alice bot (persona, knowledge, permissions)
+  └─ bot/bob    — bob bot
+```
+
+**master (shared):**
+- `manage.py`, `slack-channel/`, `scripts/`, `dashboard/`
+- `knowledge/` (baseline rules — bot branches extend it)
+- `bots/example-bot-cli/` (template only)
+
+**Bot branches:** real bot directories (`bots/alice/` etc.), bot-specific knowledge, persona.
+
+Don't add real bots to master. Pull infrastructure updates into bot branches via `git merge master`.
 
 ## Design Philosophy
 
 This project is built on **harness engineering** — the idea that an LLM's performance is determined as much by the quality of its runtime environment (context, memory, permissions, tools) as by the model itself.
 
 Key principles:
-- **Progressive Disclosure**: CLAUDE.md is an index, not a manual. Details load on demand.
-- **Permanent Correction**: Mistakes become rules via `knowledge/corrections.md`.
-- **Role Isolation**: Each bot has a focused context. No bot knows everything.
-- **Shared Infrastructure, Isolated Context**: All bots share the channel server; none share their working memory.
+- **Progressive Disclosure** — CLAUDE.md is an index, not a manual. Details load on demand.
+- **Permanent Correction** — Mistakes become rules via `knowledge/corrections.md`.
+- **Role Isolation** — Each bot has a focused context. No bot knows everything.
+- **Shared Infrastructure, Isolated Context** — All bots share the channel server; none share their working memory.
 
 ## References
 

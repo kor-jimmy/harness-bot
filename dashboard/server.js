@@ -137,21 +137,43 @@ const apiStatus = safe(async (_req, res) => {
     output = "manage.py 실행 실패";
   }
 
+  // dashboard/watchdog rows and template bots aren't real bots
+  const INFRA_NAMES = new Set(["dashboard", "watchdog", "example-bot-cli"]);
+
   const bots = [];
+  const infra = [];
   const knownNames = new Set();
   const lines = output.split("\n");
   for (const line of lines) {
-    const m = line.match(/^\s+(\w+)\s+(harness-\S+)\s+(.+)$/);
+    // allow hyphens in bot names (e.g. my-bot)
+    const m = line.match(/^\s+(\w[\w-]*)\s+(harness-\S+)\s+(.+)$/);
     if (m) {
       knownNames.add(m[1]);
-      bots.push({
+      const entry = {
         name: m[1],
         session: m[2],
-        status: m[3].includes("실행 중") || m[3].includes("running") ? "running"
-          : m[3].includes("꺼짐") || m[3].includes("stopped") ? "stopped"
+        status: m[3].includes("running") ? "running"
+          : m[3].includes("stopped") ? "stopped"
           : "warning",
         raw: m[3].trim(),
-      });
+      };
+      if (INFRA_NAMES.has(m[1])) {
+        infra.push(entry);
+      } else {
+        bots.push(entry);
+      }
+    }
+  }
+
+  // Surface bot directories that exist under bots/ but aren't registered
+  // (no .env yet, so manage.py's discover_bots() skips them).
+  const botsDir = path.join(ROOT, "bots");
+  if (fs.existsSync(botsDir)) {
+    for (const dir of fs.readdirSync(botsDir)) {
+      if (INFRA_NAMES.has(dir)) continue;
+      if (!knownNames.has(dir) && fs.statSync(path.join(botsDir, dir)).isDirectory()) {
+        bots.push({ name: dir, session: "-", status: "unregistered", raw: "unregistered" });
+      }
     }
   }
 
@@ -172,7 +194,7 @@ const apiStatus = safe(async (_req, res) => {
     }
   }
 
-  json(res, { bots, raw: output });
+  json(res, { bots, infra, raw: output });
 });
 
 // GET /api/logs — 봇 활동 로그 목록 (log/YYYY-MM-DD.md)
